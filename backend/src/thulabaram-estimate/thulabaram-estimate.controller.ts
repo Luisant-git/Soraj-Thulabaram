@@ -55,13 +55,14 @@ export class ThulabaramEstimateController {
       return `${day}/${month}/${year}`;
     };
 
-    const formatTimeHMS = (date: Date) => {
-      const d = new Date(date); // use the passed date
+    const formatTimeHMS = (date) => {
+      const d = new Date(date);
       const h = String(d.getHours()).padStart(2, '0');
       const m = String(d.getMinutes()).padStart(2, '0');
       const s = String(d.getSeconds()).padStart(2, '0');
       return `${h}:${m}:${s}`;
     };
+    
 
     const rateValue = estimate.rate?.rate ?? 0;
     const weight = Number(estimate.weight); // ensure number
@@ -76,19 +77,21 @@ export class ThulabaramEstimateController {
       <meta charset="UTF-8" />
       <style>
         body {
-          margin: 0;
-          padding: 0;
-          background: #fff;
-          font-family: monospace;
-          font-size: 14px; /* slightly bigger */
-        }
+  margin: 0;
+  padding-top: 50px;   /* very small top gap */
+  background: #fff;
+  font-family: monospace;
+  font-size: 14px;
+}
+
   
         .receipt {
-          width: 320px;  /* slightly wider for bigger content */
-          margin: 0 auto;
-          color: #000;
-        }
-  
+  width: 320px;
+  margin: 0 auto;
+  padding-top: 6px;   /* small top margin so image does not touch border */
+  color: #000;
+}
+
         img {
           display: block;
           margin: 0 auto 16px auto; /* extra gap below logo */
@@ -154,7 +157,8 @@ export class ThulabaramEstimateController {
   <div class="label">DATE</div>
   <div class="colon">:</div>
   <div class="value">
-    ${formatDateDMY(estimate.date)} ${formatTimeHMS(estimate.date)}
+  ${formatDateDMY(new Date())} ${formatTimeHMS(new Date())}
+
   </div>
 </div>
 
@@ -214,13 +218,13 @@ export class ThulabaramEstimateController {
   ) {
     const pageNumber = page && !isNaN(Number(page)) ? Number(page) : 1;
     const limitNumber = limit && !isNaN(Number(limit)) ? Number(limit) : 10;
-  
+
     return this.service.findAllPaginated(pageNumber, limitNumber, search);
   }
-  
 
-  
-  
+
+
+
 
   @Patch(':id')
   async update(

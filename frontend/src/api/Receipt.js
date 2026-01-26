@@ -1,7 +1,7 @@
-const API_BASE_URL = "http://localhost:3000/thulabaram-estimates";
+const API_BASE_URL = import.meta.env.VITE_API_URL
 
 export async function downloadThulabaramReceipt(id) {
-  const res = await fetch(`${API_BASE_URL}/download/${id}`);
+  const res = await fetch(`${API_BASE_URL}/thulabaram-estimates/download/${id}`);
   if (!res.ok) throw new Error("Download failed");
 
   const blob = await res.blob();

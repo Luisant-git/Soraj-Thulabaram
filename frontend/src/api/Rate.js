@@ -1,10 +1,10 @@
 // src/api/Thulabaram.js
 
-const API_BASE = 'http://localhost:3000/rate';
+const API_BASE = import.meta.env.VITE_API_URL
 
 // GET ALL: http://localhost:3000/rate
 export async function getAllRates() {
-  const res = await fetch(`${API_BASE}`);
+  const res = await fetch(`${API_BASE}/rate`);
   if (!res.ok) {
     const error = await res.text();
     throw new Error(error || "Failed to fetch rates");
@@ -14,7 +14,7 @@ export async function getAllRates() {
 
 // CREATE: POST http://localhost:3000/rate
 export async function createRate(date, rate, isActive = true) {
-  const res = await fetch(`${API_BASE}`, {
+  const res = await fetch(`${API_BASE}/rate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ date, rate, isActive }),
@@ -29,7 +29,7 @@ export async function createRate(date, rate, isActive = true) {
 
 // UPDATE: PATCH http://localhost:3000/rate/{id}
 export async function updateRate(id, data) {
-  const res = await fetch(`${API_BASE}/${id}`, {
+  const res = await fetch(`${API_BASE}/rate/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -44,7 +44,7 @@ export async function updateRate(id, data) {
 
 // DELETE: DELETE http://localhost:3000/rate/{id}
 export async function deleteRate(id) {
-  const res = await fetch(`${API_BASE}/${id}`, {
+  const res = await fetch(`${API_BASE}/rate/${id}`, {
     method: 'DELETE',
   });
 
@@ -57,7 +57,7 @@ export async function deleteRate(id) {
 
 // GET SINGLE: GET http://localhost:3000/rate/{id}
 export async function getRate(id) {
-  const res = await fetch(`${API_BASE}/${id}`);
+  const res = await fetch(`${API_BASE}/rate/${id}`);
   if (!res.ok) throw new Error("Failed to fetch rate");
   return res.json();
 }

@@ -80,7 +80,7 @@ const RateModal = ({ isOpen, onClose, onSubmit, initialData, loading }) => {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Rate (per Kg)</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Rate (per g)</label>
             <input
               type="number"
               step="0.01"
@@ -204,13 +204,11 @@ export default function ThulabaramRateList() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Thulabaram Rate List</h1>
-          <p className="text-sm text-slate-500">Manage daily rates per kilogram</p>
+          <p className="text-sm text-slate-500">Manage daily rates per gram</p>
         </div>
 
         <div className="flex gap-2">
-           <button onClick={fetchRates} className="p-2 border rounded-lg hover:bg-slate-50 text-slate-600" title="Refresh">
-            <RefreshCcw size={18} className={loading ? "animate-spin" : ""} />
-          </button>
+           
           <button
             onClick={handleAddClick}
             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition shadow-sm"

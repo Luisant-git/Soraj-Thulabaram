@@ -29,14 +29,17 @@ export default function TextInput({
             onChange={onChange}
             rows={rows}
             className="
-              flex-1 border rounded-lg px-3 py-2
+              flex-1 px-3 py-2
+              border border-slate-300 rounded-lg
               text-slate-800 placeholder:text-slate-400
-              border-slate-300 focus:ring-1 focus:ring-blue-500
-              outline-none resize-none
+              outline-none bg-transparent
+              focus:ring-1 focus:ring-blue-500
+              resize-none
             "
           />
         ) : (
-          <div className="flex items-center flex-1 border rounded-lg px-3 py-2 border-slate-300 focus-within:ring-1 focus-within:ring-blue-500">
+          <div className="flex items-center w-full border border-slate-300 rounded-lg bg-transparent focus-within:ring-1 focus-within:ring-blue-500">
+            {/* INPUT */}
             <input
               name={name}
               type={type}
@@ -44,20 +47,24 @@ export default function TextInput({
               value={value}
               onChange={onChange}
               className="
-                flex-1 text-slate-800 placeholder:text-slate-400
+                flex-1 px-3 py-2
+                text-slate-800 placeholder:text-slate-400
                 outline-none bg-transparent
               "
             />
 
-            {showToggle && (
-              <button
-                type="button"
-                onClick={onToggle}
-                className="text-slate-500 hover:text-slate-700"
-              >
-                {type === "password" ? toggleIconOff : toggleIconOn}
-              </button>
-            )}
+            {/* RIGHT ICON SPACE (always same width) */}
+            <div className="w-10 flex items-center justify-center">
+              {showToggle && (
+                <button
+                  type="button"
+                  onClick={onToggle}
+                  className="text-slate-500 hover:text-slate-700"
+                >
+                  {type === "password" ? toggleIconOff : toggleIconOn}
+                </button>
+              )}
+            </div>
           </div>
         )}
       </label>

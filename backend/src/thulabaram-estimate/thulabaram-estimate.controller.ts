@@ -1,6 +1,7 @@
 import {
   Controller, Get, Post, Body, Param, Patch, Delete, ParseIntPipe, Res,
-  Query
+  Query,
+  NotFoundException
 } from '@nestjs/common';
 
 import { Response } from 'express';
@@ -25,185 +26,169 @@ export class ThulabaramEstimateController {
   async findAllInactive() {
     return this.service.findAllInactive();
   }
+  
 
-  // ✅ DOWNLOAD MUST COME BEFORE :id
   @Get('download/:id')
   async download(@Param('id') id: string, @Res() res: Response) {
+    // ========= FETCH ESTIMATE =========
     const estimate = await this.service.findOne(Number(id));
-    if (!estimate) return res.status(404).send('Estimate not found');
-
-    const imagePath = join(
-      process.cwd(),
-      'src',
-      'assets',
-      'LordshivaFam.jpg',
-    );
-
-
-    if (!fs.existsSync(imagePath)) {
-      return res.status(500).send('Image not found');
+    if (!estimate) {
+      throw new NotFoundException('Estimate not found');
     }
 
+    // ========= IMAGE =========
+    const imagePath = join(process.cwd(), 'src', 'assets', 'LordshivaFam.jpg');
+    let imageBase64 = '';
+    if (fs.existsSync(imagePath)) {
+      imageBase64 = fs.readFileSync(imagePath).toString('base64');
+    }
 
-    const imageBase64 = fs.readFileSync(imagePath).toString('base64');
+    // ========= DATE / TIME =========
+    const d = new Date();
+    const dateStr =
+      `${String(d.getDate()).padStart(2, '0')}/` +
+      `${String(d.getMonth() + 1).padStart(2, '0')}/` +
+      `${d.getFullYear()}`;
 
-    const formatDateDMY = (date: Date) => {
-      const d = new Date(date); // use the passed date
-      const day = String(d.getDate()).padStart(2, '0');
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const year = d.getFullYear();
-      return `${day}/${month}/${year}`;
-    };
+    let h = d.getHours();
+    const m = String(d.getMinutes()).padStart(2, '0');
+    const s = String(d.getSeconds()).padStart(2, '0');
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    const timeStr = `${h}:${m}:${s} ${ampm}`;
 
-    const formatTimeHMS = (date) => {
-      const d = new Date(date);
-      const h = String(d.getHours()).padStart(2, '0');
-      const m = String(d.getMinutes()).padStart(2, '0');
-      const s = String(d.getSeconds()).padStart(2, '0');
-      return `${h}:${m}:${s}`;
-    };
-    
+    // ========= VALUES =========
+    const weight = Number(estimate.weight ?? 0);
+    const touch = Number(estimate.touch ?? 0);
+    const amount = Number(estimate.amount ?? 0);
 
-    const rateValue = estimate.rate?.rate ?? 0;
-    const weight = Number(estimate.weight); // ensure number
-    const rate = Number(rateValue);         // ensure number
-    const amount = Number((weight * rate).toFixed(2)); // round to 2 decimals
+    // ✅ RATE DERIVED (NO DB FIELD NEEDED)
+    const rate = weight > 0 ? amount / weight : 0;
 
-
+    // ========= HTML (THERMAL) =========
     const html = `
-  <!DOCTYPE html>
-  <html>
-    <head>
-      <meta charset="UTF-8" />
-      <style>
-        body {
-  margin: 0;
-  padding-top: 50px;   /* very small top gap */
-  background: #fff;
-  font-family: monospace;
-  font-size: 14px;
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>Thermal Receipt</title>
+
+<style>
+@page {
+  size: 80mm auto;
+  margin: 5mm;
 }
 
-  
-        .receipt {
-  width: 320px;
-  margin: 0 auto;
-  padding-top: 6px;   /* small top margin so image does not touch border */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 80mm;
+  font-family: monospace;
+  font-size: 9px;
+  line-height: 1.3;
+  background: #fff;
   color: #000;
 }
 
-        img {
-          display: block;
-          margin: 0 auto 16px auto; /* extra gap below logo */
-          width: 80px; /* bigger logo */
-        }
-  
-        .center {
-          text-align: center;
-        }
-  
-        .title {
-          font-weight: bold;
-          font-size: 16px; /* slightly bigger titles */
-          margin: 8px 0;   /* extra spacing like handwritten */
-        }
-  
-        .line {
-          border-top: 1px dashed #000;
-          margin: 10px 0; /* slightly bigger gap between sections */
-        }
-  
-        .row {
-          display: flex;
-          justify-content: center;
-          margin: 8px 0; /* increased vertical gap between rows */
-        }
-  
-        .label {
-          width: 90px;       /* slightly wider */
-          text-align: left;
-          padding-left: 4px;
-        }
-  
-        .colon {
-          width: 12px;       /* natural small gap */
-          text-align: center;
-        }
-  
-        .value {
-          flex: 1;
-          text-align: left;  /* value starts nicely after colon */
-          padding-left: 45px;   /* clean look */
-          white-space: nowrap;
-        }
-  
-        .footer {
-          text-align: center;
-          margin-top: 20px;  /* more gap above footer */
-          font-weight: bold;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="receipt">
-        <img src="data:image/png;base64,${imageBase64}" />
-  
-        <div class="center title">SORAJ THULABARAM</div>
-        <div class="center title">ESTIMATE</div>
-  
-        <div class="line"></div>
-  
-        <div class="row">
-  <div class="label">DATE</div>
-  <div class="colon">:</div>
-  <div class="value">
-  ${formatDateDMY(new Date())} ${formatTimeHMS(new Date())}
+.receipt {
+  padding: 5mm;
+  box-sizing: border-box;
+}
 
+img {
+  display: block;
+  margin: 0 auto 4px auto;
+  width: 38px;
+}
+
+.center { text-align: center; }
+
+.title {
+  font-weight: bold;
+  font-size: 11px;
+  margin: 2px 0;
+}
+
+.line {
+  border-top: 1px dashed #000;
+  margin: 4px 0;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  margin: 2px 0;
+}
+
+.label { white-space: nowrap; }
+.value { white-space: nowrap; text-align: right; }
+
+.bold { font-weight: bold; }
+
+.footer {
+  text-align: center;
+  margin-top: 6mm;
+  font-size: 10px;
+  font-weight: bold;
+}
+</style>
+</head>
+
+<body>
+<div class="receipt">
+
+  ${imageBase64 ? `<img src="data:image/png;base64,${imageBase64}" />` : ''}
+
+  <div class="center title">SORAJ THULABARAM</div>
+  <div class="center title">ESTIMATE</div>
+
+  <div class="line"></div>
+
+  <div class="row">
+    <div class="label">DATE</div>
+    <div class="value">${dateStr} ${timeStr}</div>
   </div>
+
+  <div class="line"></div>
+
+  <div class="row">
+    <div class="label">WEIGHT</div>
+    <div class="value">${weight.toFixed(3)}</div>
+  </div>
+
+  <div class="row">
+    <div class="label">TOUCH</div>
+    <div class="value">${touch.toFixed(2)}</div>
+  </div>
+
+  <div class="row">
+    <div class="label">RATE</div>
+    <div class="value">${rate.toFixed(2)}</div>
+  </div>
+
+  <div class="row bold">
+    <div class="label">AMOUNT</div>
+    <div class="value">${amount.toFixed(2)}</div>
+  </div>
+
+  <div class="line"></div>
+
+  <div class="footer">THANK YOU, VISIT AGAIN!</div>
+
 </div>
+</body>
+</html>
+`;
 
-  
-        <div class="line"></div>
-  
-        <div class="row">
-          <div class="label">WEIGHT</div>
-          <div class="colon">:</div>
-          <div class="value">${estimate.weight}</div>
-        </div>
-  
-        <div class="row">
-          <div class="label">RATE</div>
-          <div class="colon">:</div>
-          <div class="value">${rateValue}</div>
-        </div>
- <div class="row">
-  <div class="label">AMOUNT</div>
-  <div class="colon">:</div>
-  <div class="value">₹ ${amount.toFixed(2)}</div>
-</div>
+    // ========= SEND =========
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('Cache-Control', 'no-store');
 
-
-
-
-        <div class="line"></div>
-  
-        <div class="footer">THANK YOU VISIT AGAIN</div>
-      </div>
-    </body>
-  </html>
-  `;
-
-
-
-
-    res.set({
-      'Content-Type': 'text/html',
-      'Content-Disposition': 'attachment; filename="thulabaram.html"',
-    });
-
-    res.send(html);
+    return res.send(html);
   }
-
+  
+      
 
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number) {

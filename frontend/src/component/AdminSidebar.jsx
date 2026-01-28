@@ -76,10 +76,10 @@ export default function AdminSidebar({
                   </NavLink>
                 </li>
                 <li>
-                  <NavLink to="/admin/thulabaram/list" className={linkClass} onClick={onCloseMobile}>
+                  {/* <NavLink to="/admin/thulabaram/list" className={linkClass} onClick={onCloseMobile}>
                     <List size={16} className="shrink-0" />
                     <span>Thulabaram List</span>
-                  </NavLink>
+                  </NavLink> */}
                 </li>
                 {/* Rate List Item */}
                 <li>

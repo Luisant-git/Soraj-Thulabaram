@@ -8,30 +8,50 @@ import { PrismaService } from 'src/prisma/prisma.service';
 export class ThulabaramEstimateService {
   constructor(private prisma: PrismaService) {}
 
-
- 
-  async create(createDto: CreateThulabaramEstimateDto) {
-    const rateData = await this.prisma.rate.findFirst({
-      where: { id: createDto.rateId, isActive: true },
+  async create(dto: CreateThulabaramEstimateDto) {
+    // 1️⃣ Get latest master rate
+    const masterRate = await this.prisma.rate.findFirst({
+      where: { isActive: true },
+      orderBy: { id: 'desc' },
     });
   
-    if (!rateData) {
-      throw new Error(`Rate with ID ${createDto.rateId} not found or inactive`);
-    }
+    if (!masterRate) throw new Error('No active rate');
   
-    const data = {
-      date: new Date(createDto.date),
-      time: createDto.time,
-      weight: createDto.weight,
-      rateId: createDto.rateId,
-      amount: createDto.weight * rateData.rate,
-    };
+    // 2️⃣ Decide rate ONLY for calculation
+    const rateToUse =
+      dto.rate && dto.rate > 0
+        ? Number(dto.rate)        // user rate
+        : Number(masterRate.rate); // master rate
   
-    return this.prisma.thulabaramEstimate.create({
-      data,
+    // 3️⃣ Calculate amount
+    const weight = Number(dto.weight);
+    const amount = weight * rateToUse;
+  
+    // 4️⃣ Save ONLY required fields
+    const estimate = await this.prisma.thulabaramEstimate.create({
+      data: {
+        date: new Date(dto.date),
+        time: dto.time,
+        weight,
+        rateId: masterRate.id, // ✅ always master
+        touch: dto.touch ?? null,
+        amount,
+      },
       include: { rate: true },
     });
+  
+    // 5️⃣ Attach usedRate ONLY for response / receipt
+    return {
+      ...estimate,
+      usedRate: rateToUse, // 👈 NOT stored in DB
+    };
   }
+  
+  
+ 
+
+  
+  
   
 
   
@@ -95,13 +115,11 @@ export class ThulabaramEstimateService {
     });
   }
 
-
-  // Update an estimate
   async update(
     id: number,
-    updateDto: UpdateThulabaramEstimateDto,
+    updateDto: UpdateThulabaramEstimateDto & { rate?: number; touch?: number },
   ) {
-    // Fetch the existing estimate to check if it exists and get current values
+    // 1️⃣ Fetch existing estimate
     const existing = await this.prisma.thulabaramEstimate.findUnique({
       where: { id },
     });
@@ -110,51 +128,44 @@ export class ThulabaramEstimateService {
       throw new Error(`ThulabaramEstimate with ID ${id} not found or inactive`);
     }
   
-    const data: any = {
-      ...updateDto,
-    };
+    const data: any = {};
   
-    // Convert date string to Date if provided
-    if (updateDto.date) {
-      data.date = new Date(updateDto.date);
+    // 2️⃣ Date & time
+    if (updateDto.date) data.date = new Date(updateDto.date);
+    if (updateDto.time) data.time = updateDto.time;
+  
+    // 3️⃣ Weight
+    const weight =
+      updateDto.weight !== undefined
+        ? Number(updateDto.weight)
+        : existing.weight;
+  
+    data.weight = weight;
+  
+    // 4️⃣ Touch (saved only)
+    if (updateDto.touch !== undefined) {
+      data.touch = Number(updateDto.touch);
     }
   
-    // If weight or rateId changes, recalculate amount
-    let rateValue = existing.rateId;
-  
-    if (updateDto.rateId) {
-      // Use new rateId
-      const rateData = await this.prisma.rate.findFirst({
-        where: { id: updateDto.rateId, isActive: true },
-      });
-  
-      if (!rateData) {
-        throw new Error(`Rate with ID ${updateDto.rateId} not found or inactive`);
-      }
-  
-      data.rateId = updateDto.rateId;
-      rateValue = rateData.rate;
+    // 5️⃣ AMOUNT LOGIC (CRITICAL)
+    if (updateDto.rate !== undefined && Number(updateDto.rate) > 0) {
+      // ✅ user edited rate → recalc
+      const rateValue = Number(updateDto.rate);
+      data.amount = weight * rateValue;
     } else {
-      // Use existing rateId
-      const rateData = await this.prisma.rate.findUnique({
-        where: { id: existing.rateId },
-      });
-      rateValue = rateData.rate;
+      // ✅ user did NOT edit rate → keep old amount
+      data.amount = existing.amount;
     }
   
-    if (updateDto.weight !== undefined) {
-      data.amount = updateDto.weight * rateValue;
-    } else if (updateDto.rateId) {
-      // weight didn't change, but rate changed
-      data.amount = existing.weight * rateValue;
-    }
+    // 6️⃣ rateId NEVER changes on edit
+    data.rateId = existing.rateId;
   
     return this.prisma.thulabaramEstimate.update({
       where: { id },
       data,
-      include: { rate: true }, // include related Rate
     });
   }
+  
   
   
 

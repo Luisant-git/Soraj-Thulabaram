@@ -24,7 +24,8 @@ model ThulabaramEstimate {
   date      DateTime
   time      String
   weight    Float
-  rateId      Int
+  rateId    Int
+  touch     Float?
   amount    Float
   isActive  Boolean @default(true)
   createdAt DateTime @default(now())
@@ -43,3 +44,4 @@ model Rate{
 
   thulabaramEstimates  ThulabaramEstimate[]
 }
+

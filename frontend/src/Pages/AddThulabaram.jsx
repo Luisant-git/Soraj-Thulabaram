@@ -1,24 +1,28 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { PlusCircle, Printer } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { Printer } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
 
-import { 
-  createThulabaramEstimate, 
-  getThulabaramEstimateById, 
-  updateThulabaramEstimate 
+import {
+  createThulabaramEstimate,
+  getThulabaramEstimateById,
+  updateThulabaramEstimate,
 } from "../api/Thulabaram";
-import { downloadThulabaramReceipt } from "../api/Receipt";
-import { getAllRates } from "../api/Rate"; // fetch master rates
+import { getAllRates } from "../api/Rate";
 
-// Helper functions
+import { Button, TextInput } from "../component/FormFiled";
+
+// --- Helpers ---
 const fmtDate = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
     d.getDate()
   ).padStart(2, "0")}`;
 
 const fmtTime = (d = new Date()) =>
-  `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(
+    2,
+    "0"
+  )}`;
 
 const toInputDate = (s) => {
   if (!s) return fmtDate();
@@ -34,10 +38,19 @@ const toInputTime = (t) => {
   return `${h.padStart(2, "0")}:${m.padStart(2, "0")}`;
 };
 
-const defaultForm = () => ({ date: fmtDate(), time: fmtTime(), weight: "", rateId: "" });
+// default form now accepts a rate so reset keeps the latest rate
+const defaultForm = (rate = "") => ({
+  date: fmtDate(),
+  time: fmtTime(),
+  weight: "",
+  touch: "", // just display
+  rate: rate ? String(rate) : "",
+  amount: "",
+});
 
 export default function ThulabaramEstimate() {
-  const [form, setForm] = useState(defaultForm());
+  const [latestRate, setLatestRate] = useState(""); // <-- keep latest master rate
+  const [form, setForm] = useState(() => defaultForm(""));
   const [loading, setLoading] = useState(false);
   const [rateOptions, setRateOptions] = useState([]);
   const formRef = useRef(null);
@@ -48,19 +61,34 @@ export default function ThulabaramEstimate() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Fetch rates from master table
+  // --- Fetch master rates ---
   useEffect(() => {
     (async () => {
       try {
         const rates = await getAllRates();
         setRateOptions(rates);
-      } catch (err) {
-        toast.error("Failed to load rates");
+
+        if (rates.length) {
+          const latest = rates.reduce(
+            (prev, curr) => (curr.id > prev.id ? curr : prev),
+            rates[0]
+          );
+
+          const lr = String(latest.rate ?? "");
+          setLatestRate(lr);
+
+          // For new record: set rate immediately if empty
+          if (!isEdit) {
+            setForm((p) => ({ ...p, rate: p.rate || lr }));
+          }
+        }
+      } catch {
+        toast.error("Failed to fetch master rates");
       }
     })();
-  }, []);
+  }, [isEdit]);
 
-  // Prefill form when editing
+  // --- Prefill form for edit ---
   useEffect(() => {
     if (!isEdit) return;
 
@@ -70,7 +98,9 @@ export default function ThulabaramEstimate() {
         date: toInputDate(stateRow.date),
         time: toInputTime(stateRow.time),
         weight: String(stateRow.weight ?? ""),
-        rateId: String(stateRow.rateId ?? ""),
+        touch: String(stateRow.touch ?? ""),
+        rate: String(stateRow.rate ?? ""),
+        amount: String(stateRow.amount ?? ""),
       });
       return;
     }
@@ -82,7 +112,9 @@ export default function ThulabaramEstimate() {
           date: toInputDate(row.date),
           time: toInputTime(row.time),
           weight: String(row.weight ?? ""),
-          rateId: String(row.rateId ?? ""),
+          touch: String(row.touch ?? ""),
+          rate: String(row.rate ?? ""),
+          amount: String(row.amount ?? ""),
         });
       } catch {
         toast.error("Record not found");
@@ -91,23 +123,44 @@ export default function ThulabaramEstimate() {
     })();
   }, [isEdit, id, location.state, navigate]);
 
+  // --- Handle input changes ---
   const onChange = (e) => {
     const { name, value } = e.target;
-    setForm((p) => ({ ...p, [name]: value }));
+
+    setForm((prev) => {
+      const updated = { ...prev, [name]: value };
+
+      // Auto-calculate amount if weight or rate changed
+      if (
+        (name === "weight" || name === "rate") &&
+        updated.weight &&
+        updated.rate
+      ) {
+        const w = parseFloat(updated.weight) || 0;
+        const r = parseFloat(updated.rate) || 0;
+        updated.amount = (w * r).toFixed(2);
+      }
+
+      return updated;
+    });
   };
 
-  const resetForm = () => setForm(defaultForm());
+  // reset but keep latest rate (no manual refresh needed)
+  const resetForm = () => setForm(defaultForm(latestRate));
 
-  // Auto-calculate amount based on weight * selected rate
-  const amount = useMemo(() => {
-    const w = parseFloat(form.weight);
-    const selectedRate = rateOptions.find((r) => String(r.id) === form.rateId);
-    const r = selectedRate?.rate ?? 0;
-    const val = !isNaN(w) && !isNaN(r) ? w * r : 0;
-    return Math.round(val * 100) / 100;
-  }, [form.weight, form.rateId, rateOptions]);
+  // --- Open receipt ---
+  const openReceiptInNewTab = (estimateId) => {
+    const receiptUrl = `${import.meta.env.VITE_API_URL
+      }/thulabaram-estimates/download/${estimateId}`;
+    window.open(receiptUrl, "_blank");
+  };
 
+  // --- Save form ---
   const save = async () => {
+    if (!form.weight) return toast.error("Please enter the Weight");
+    if (!form.rate) return toast.error("Please enter the Rate");
+    if (!form.amount) return toast.error("Please enter the Amount");
+
     const el = formRef.current;
     if (el && !el.checkValidity()) {
       el.reportValidity();
@@ -118,27 +171,29 @@ export default function ThulabaramEstimate() {
       date: form.date,
       time: form.time,
       weight: parseFloat(form.weight),
-      rateId: parseInt(form.rateId),
-      amount,
+      touch: parseFloat(form.touch || 0),
+      rate: parseFloat(form.rate),
+      amount: parseFloat(form.amount),
     };
 
     try {
       setLoading(true);
+      let response;
+
       if (isEdit) {
-        await updateThulabaramEstimate(id, payload);
+        response = await updateThulabaramEstimate(id, payload);
         toast.success("Updated Successfully");
       } else {
-        const response = await createThulabaramEstimate(payload);
-        const newId = response?.id || response?.data?.id;
-        if (newId) {
-          toast.success("Added! Downloading receipt...");
-          await downloadThulabaramReceipt(newId);
-          resetForm();
-        } else {
-          toast.warning("Added, but could not retrieve ID for printing.");
-          resetForm();
-        }
+        response = await createThulabaramEstimate(payload);
+        toast.success("Added Successfully!");
       }
+
+      // --- Open receipt automatically ---
+      const newId = response?.id || response?.data?.id;
+      if (newId) openReceiptInNewTab(newId);
+
+      // reset only for add, but keep latest rate
+      if (!isEdit) resetForm();
     } catch (e) {
       console.error(e);
       toast.error(e?.message || "Failed to process request");
@@ -147,124 +202,101 @@ export default function ThulabaramEstimate() {
     }
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    await save();
+    save();
   };
 
   return (
     <div className="min-h-screen bg-slate-50 flex justify-center px-4 py-6">
       <div className="w-full max-w-4xl space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">
-            {isEdit ? "Edit Thulabaram" : "Thulabaram Estimate"}
-          </h1>
-          <p className="text-sm text-slate-500">
-            Enter date, time, weight and select a rate. Amount is auto-calculated.
-          </p>
-        </div>
+        <h1 className="text-2xl font-semibold text-slate-900">
+          {isEdit ? "Edit Thulabaram" : "Thulabaram Estimate"}
+        </h1>
 
-        <form ref={formRef} onSubmit={handleSubmit} className="bg-white border rounded-xl shadow-sm p-5" noValidate>
+        <form
+          ref={formRef}
+          onSubmit={handleSubmit}
+          className="bg-white border rounded-xl shadow-sm p-5"
+          noValidate
+        >
           <h3 className="text-base font-semibold mb-4 text-slate-900">
             {isEdit ? "Update Details" : "Estimate Details"}
           </h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Date */}
-            <div>
-              <p className="text-xs mb-1 text-slate-600">Date</p>
-              <input
-                type="date"
-                name="date"
-                value={form.date}
-                onChange={onChange}
-                required
-                disabled={loading}
-                className="w-full border rounded-lg px-3 py-2 text-sm border-slate-300 outline-none focus:ring-1 focus:ring-[var(--primary)]"
-              />
-            </div>
+            <TextInput
+              label="Date"
+              name="date"
+              type="date"
+              value={form.date}
+              onChange={onChange}
+            />
+            <TextInput
+              label="Time"
+              name="time"
+              type="time"
+              value={form.time}
+              onChange={onChange}
+            />
 
-            {/* Time */}
-            <div>
-              <p className="text-xs mb-1 text-slate-600">Time</p>
-              <input
-                type="time"
-                name="time"
-                value={form.time}
-                onChange={onChange}
-                required
-                disabled={loading}
-                className="w-full border rounded-lg px-3 py-2 text-sm border-slate-300 outline-none focus:ring-1 focus:ring-[var(--primary)]"
-              />
-            </div>
+            <TextInput
+              label="Weight (g)"
+              name="weight"
+              type="number"
+              step="0.001"
+              min="0.001"
+              placeholder="Enter weight in grams"
+              value={form.weight}
+              onChange={onChange}
+              required
+            />
 
-            {/* Weight */}
-            <div>
-              <p className="text-xs mb-1 text-slate-600">Weight (kg)</p>
-              <input
-                type="number"
-                name="weight"
-                step="0.001"
-                min="0.001"
-                placeholder="e.g. 1.250"
-                value={form.weight}
-                onChange={onChange}
-                required
-                disabled={loading}
-                className="w-full border rounded-lg px-3 py-2 text-sm border-slate-300 outline-none focus:ring-1 focus:ring-[var(--primary)]"
-              />
-            </div>
+            <TextInput
+              label="Touch (%)"
+              name="touch"
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              placeholder="Enter touch (optional)"
+              value={form.touch}
+              onChange={onChange}
+            />
 
-            {/* Rate dropdown */}
-            <div>
-              <p className="text-xs mb-1 text-slate-600">Rate (per kg)</p>
-              <select
-                name="rateId"
-                value={form.rateId}
-                onChange={onChange}
-                required
-                disabled={loading}
-                className="w-full border rounded-lg px-3 py-2 text-sm border-slate-300 outline-none focus:ring-1 focus:ring-[var(--primary)]"
-              >
-                <option value="">Select Rate</option>
-                {rateOptions.map((r) => (
-                  <option key={r.id} value={r.id}>
-                  ₹  {r.rate}  
-                  </option>
-                ))}
-              </select>
-            </div>
+            <TextInput
+              label="Rate (₹)"
+              name="rate"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Enter rate or use latest"
+              value={form.rate}
+              onChange={onChange}
+              required
+            />
 
-            {/* Amount */}
-            <div className="sm:col-span-2">
-              <p className="text-xs mb-1 text-slate-600">Amount (₹)</p>
-              <input
-                type="text"
-                value={`₹ ${amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                readOnly
-                className="w-full bg-slate-50 border rounded-lg px-3 py-2 text-sm border-slate-200 text-slate-800 font-mono tabular-nums"
-              />
-            </div>
+            <TextInput
+              label="Amount (₹)"
+              name="amount"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Auto-calculated"
+              value={form.amount}
+              onChange={onChange}
+              required
+            />
           </div>
 
           <div className="flex justify-end mt-5">
-            <button
+            <Button
               type="submit"
+              icon={<Printer className="w-4 h-4" />}
               disabled={loading}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm text-white bg-[var(--primary,#0ea5e9)] hover:brightness-95 disabled:opacity-60"
             >
-              {loading ? (
-                <span>Processing...</span>
-              ) : isEdit ? (
-                <>
-                  <PlusCircle className="w-4 h-4" /> Update
-                </>
-              ) : (
-                <>
-                  <Printer className="w-4 h-4" /> Add & Print
-                </>
-              )}
-            </button>
+              {isEdit ? "Update" : "Add & Print"}
+            </Button>
           </div>
         </form>
       </div>

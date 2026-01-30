@@ -1,18 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Printer } from "lucide-react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
 
-import {
-  createThulabaramEstimate,
-  getThulabaramEstimateById,
-  updateThulabaramEstimate,
-} from "../api/Thulabaram";
+import { createThulabaramEstimate } from "../api/Thulabaram";
 import { getAllRates } from "../api/Rate";
 
 import { Button, TextInput } from "../component/FormFiled";
 
-// --- Helpers ---
+/* ================= Helpers ================= */
+
 const fmtDate = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
     d.getDate()
@@ -24,230 +20,156 @@ const fmtTime = (d = new Date()) =>
     "0"
   )}`;
 
-const toInputDate = (s) => {
-  if (!s) return fmtDate();
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.split("T")[0];
-  const d = new Date(s);
-  if (isNaN(d.getTime())) return fmtDate();
-  return fmtDate(d);
-};
-
-const toInputTime = (t) => {
-  if (!t) return fmtTime();
-  const [h = "00", m = "00"] = String(t).split(":");
-  return `${h.padStart(2, "0")}:${m.padStart(2, "0")}`;
-};
-
-// default form now accepts a rate so reset keeps the latest rate
 const defaultForm = (rate = "") => ({
   date: fmtDate(),
   time: fmtTime(),
   weight: "",
-  touch: "", // just display
-  rate: rate ? String(rate) : "",
+  touch: "",
+  rate,
   amount: "",
 });
 
+/* ========= NUMERIC INPUT GUARD ========= */
+const allowOnlyDecimalNumbers = (e) => {
+  const allowedKeys = [
+    "Backspace",
+    "Delete",
+    "ArrowLeft",
+    "ArrowRight",
+    "Tab",
+  ];
+
+  if (allowedKeys.includes(e.key)) return;
+
+  if (!/^[0-9.]$/.test(e.key)) {
+    e.preventDefault();
+  }
+
+  if (e.key === "." && e.target.value.includes(".")) {
+    e.preventDefault();
+  }
+};
+
+/* ================= Component ================= */
+
 export default function ThulabaramEstimate() {
-  const [latestRate, setLatestRate] = useState(""); // <-- keep latest master rate
-  const [form, setForm] = useState(() => defaultForm(""));
+  const [latestRate, setLatestRate] = useState("");
+  const [form, setForm] = useState(defaultForm(""));
   const [loading, setLoading] = useState(false);
-  const [rateOptions, setRateOptions] = useState([]);
   const formRef = useRef(null);
 
-  const [sp] = useSearchParams();
-  const id = sp.get("id");
-  const isEdit = Boolean(id);
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  // --- Fetch master rates ---
+  /* ========= Fetch Latest Rate ========= */
   useEffect(() => {
     (async () => {
       try {
         const rates = await getAllRates();
-        setRateOptions(rates);
+        if (!rates?.length) return;
 
-        if (rates.length) {
-          const latest = rates.reduce(
-            (prev, curr) => (curr.id > prev.id ? curr : prev),
-            rates[0]
-          );
+        const latest = rates.reduce((a, b) => (b.id > a.id ? b : a));
+        const baseRate = String(latest.rate);
 
-          const lr = String(latest.rate ?? "");
-          setLatestRate(lr);
-
-          // For new record: set rate immediately if empty
-          if (!isEdit) {
-            setForm((p) => ({ ...p, rate: p.rate || lr }));
-          }
-        }
+        setLatestRate(baseRate);
+        setForm((p) => ({ ...p, rate: baseRate }));
       } catch {
-        toast.error("Failed to fetch master rates");
+        toast.error("Failed to fetch rate");
       }
     })();
-  }, [isEdit]);
+  }, []);
 
-  // --- Prefill form for edit ---
-  useEffect(() => {
-    if (!isEdit) return;
-
-    const stateRow = location.state;
-    if (stateRow?.id && String(stateRow.id) === String(id)) {
-      setForm({
-        date: toInputDate(stateRow.date),
-        time: toInputTime(stateRow.time),
-        weight: String(stateRow.weight ?? ""),
-        touch: String(stateRow.touch ?? ""),
-        rate: String(stateRow.rate ?? ""),
-        amount: String(stateRow.amount ?? ""),
-      });
-      return;
-    }
-
-    (async () => {
-      try {
-        const row = await getThulabaramEstimateById(id);
-        setForm({
-          date: toInputDate(row.date),
-          time: toInputTime(row.time),
-          weight: String(row.weight ?? ""),
-          touch: String(row.touch ?? ""),
-          rate: String(row.rate ?? ""),
-          amount: String(row.amount ?? ""),
-        });
-      } catch {
-        toast.error("Record not found");
-        navigate("/admin/thulabaram/list");
-      }
-    })();
-  }, [isEdit, id, location.state, navigate]);
-
-  // --- Handle input changes ---
+  /* ========= MAIN LOGIC ========= */
   const onChange = (e) => {
     const { name, value } = e.target;
 
     setForm((prev) => {
       const updated = { ...prev, [name]: value };
 
-      // Auto-calculate amount if weight or rate changed
-      if (
-        (name === "weight" || name === "rate") &&
-        updated.weight &&
-        updated.rate
-      ) {
-        const w = parseFloat(updated.weight) || 0;
-        const r = parseFloat(updated.rate) || 0;
-        updated.amount = (w * r).toFixed(2);
+      const weight = parseFloat(updated.weight) || 0;
+      const touch = parseFloat(updated.touch) || 0;
+      const baseRate = parseFloat(latestRate) || 0;
+
+      let finalRate = baseRate;
+
+      // Touch logic
+      if (touch && touch < 90) {
+        finalRate = (baseRate * touch) / 100;
+      }
+
+      updated.rate = finalRate ? finalRate.toFixed(2) : "";
+
+      if (weight && finalRate) {
+        updated.amount = (weight * finalRate).toFixed(2);
+      } else {
+        updated.amount = "";
       }
 
       return updated;
     });
   };
 
-  // reset but keep latest rate (no manual refresh needed)
-  const resetForm = () => setForm(defaultForm(latestRate));
-
-  // --- Open receipt ---
-  const openReceiptInNewTab = (estimateId) => {
-    const receiptUrl = `${import.meta.env.VITE_API_URL
-      }/thulabaram-estimates/download/${estimateId}`;
-    window.open(receiptUrl, "_blank");
-  };
-
-  // --- Save form ---
+  /* ========= Save ========= */
   const save = async () => {
-    if (!form.weight) return toast.error("Please enter the Weight");
-    if (!form.rate) return toast.error("Please enter the Rate");
-    if (!form.amount) return toast.error("Please enter the Amount");
-
-    const el = formRef.current;
-    if (el && !el.checkValidity()) {
-      el.reportValidity();
-      return;
-    }
+    if (!form.weight) return toast.error("Weight is required");
+    if (!form.touch) return toast.error("Touch is required");
 
     const payload = {
       date: form.date,
       time: form.time,
       weight: parseFloat(form.weight),
-      touch: parseFloat(form.touch || 0),
+      touch: parseFloat(form.touch),
       rate: parseFloat(form.rate),
       amount: parseFloat(form.amount),
     };
 
     try {
       setLoading(true);
-      let response;
 
-      if (isEdit) {
-        response = await updateThulabaramEstimate(id, payload);
-        toast.success("Updated Successfully");
-      } else {
-        response = await createThulabaramEstimate(payload);
-        toast.success("Added Successfully!");
+      const res = await createThulabaramEstimate(payload);
+      toast.success("Added Successfully");
+
+      const newId = res?.id || res?.data?.id;
+      if (newId) {
+        window.open(
+          `${import.meta.env.VITE_API_URL}/thulabaram-estimates/download/${newId}`,
+          "_blank"
+        );
       }
 
-      // --- Open receipt automatically ---
-      const newId = response?.id || response?.data?.id;
-      if (newId) openReceiptInNewTab(newId);
-
-      // reset only for add, but keep latest rate
-      if (!isEdit) resetForm();
-    } catch (e) {
-      console.error(e);
-      toast.error(e?.message || "Failed to process request");
+      setForm(defaultForm(latestRate));
+    } catch {
+      toast.error("Failed to save");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    save();
-  };
-
+  /* ========= UI ========= */
   return (
-    <div className="min-h-screen bg-slate-50 flex justify-center px-4 py-6">
-      <div className="w-full max-w-4xl space-y-6">
-        <h1 className="text-2xl font-semibold text-slate-900">
-          {isEdit ? "Edit Thulabaram" : "Thulabaram Estimate"}
+    <div className="min-h-screen bg-slate-50 flex justify-center p-6">
+      <div className="w-full max-w-4xl">
+        <h1 className="text-2xl font-semibold mb-4">
+          Thulabaram Estimate
         </h1>
 
         <form
           ref={formRef}
-          onSubmit={handleSubmit}
-          className="bg-white border rounded-xl shadow-sm p-5"
-          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            save();
+          }}
+          className="bg-white p-6 rounded-xl shadow"
         >
-          <h3 className="text-base font-semibold mb-4 text-slate-900">
-            {isEdit ? "Update Details" : "Estimate Details"}
-          </h3>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <TextInput
-              label="Date"
-              name="date"
-              type="date"
-              value={form.date}
-              onChange={onChange}
-            />
-            <TextInput
-              label="Time"
-              name="time"
-              type="time"
-              value={form.time}
-              onChange={onChange}
-            />
+            <TextInput label="Date" type="date" name="date" value={form.date} onChange={onChange} />
+            <TextInput label="Time" type="time" name="time" value={form.time} onChange={onChange} />
 
             <TextInput
               label="Weight (g)"
               name="weight"
-              type="number"
-              step="0.001"
-              min="0.001"
-              placeholder="Enter weight in grams"
+              type="text"
+              inputMode="decimal"
+              placeholder="Eg: 5.250"
               value={form.weight}
+              onKeyDown={allowOnlyDecimalNumbers}
               onChange={onChange}
               required
             />
@@ -255,47 +177,22 @@ export default function ThulabaramEstimate() {
             <TextInput
               label="Touch (%)"
               name="touch"
-              type="number"
-              step="0.01"
-              min="0"
-              max="100"
-              placeholder="Enter touch (optional)"
+              type="text"
+              inputMode="decimal"
+              placeholder="Eg: 90 or 85.5"
               value={form.touch}
-              onChange={onChange}
-            />
-
-            <TextInput
-              label="Rate (₹)"
-              name="rate"
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="Enter rate or use latest"
-              value={form.rate}
+              onKeyDown={allowOnlyDecimalNumbers}
               onChange={onChange}
               required
             />
 
-            <TextInput
-              label="Amount (₹)"
-              name="amount"
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="Auto-calculated"
-              value={form.amount}
-              onChange={onChange}
-              required
-            />
+            <TextInput label="Rate (₹)" name="rate" placeholder="Auto from touch" value={form.rate} disabled />
+            <TextInput label="Amount (₹)" name="amount" placeholder="Auto calculated" value={form.amount} disabled />
           </div>
 
-          <div className="flex justify-end mt-5">
-            <Button
-              type="submit"
-              icon={<Printer className="w-4 h-4" />}
-              disabled={loading}
-            >
-              {isEdit ? "Update" : "Add & Print"}
+          <div className="flex justify-end mt-6">
+            <Button type="submit" disabled={loading} icon={<Printer className="w-4 h-4" />}>
+              Add & Print
             </Button>
           </div>
         </form>

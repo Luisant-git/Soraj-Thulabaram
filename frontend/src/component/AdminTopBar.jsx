@@ -48,14 +48,14 @@ export default function AppTopbar({
           {/* Brand */}
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white grid place-items-center font-semibold shadow-sm">
-              S
+              V
             </div>
             <div className="hidden sm:block">
               <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">
-                Soraj
+                Velan
               </p>
               <h1 className="text-sm font-semibold text-slate-900 tracking-tight">
-                Thulabaram Panel
+                Thulabaram 
               </h1>
             </div>
           </div>

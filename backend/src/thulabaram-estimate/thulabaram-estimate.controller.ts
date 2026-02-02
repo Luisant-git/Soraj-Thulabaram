@@ -139,8 +139,8 @@ img {
 
   ${imageBase64 ? `<img src="data:image/png;base64,${imageBase64}" />` : ''}
 
-  <div class="center title">SORAJ THULABARAM</div>
-  <div class="center title">ESTIMATE</div>
+  <div class="center title">VELAN THULABARAM</div>
+  
 
   <div class="line"></div>
 

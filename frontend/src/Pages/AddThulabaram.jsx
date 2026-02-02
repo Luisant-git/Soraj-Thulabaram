@@ -87,12 +87,8 @@ export default function ThulabaramEstimate() {
       const touch = parseFloat(updated.touch) || 0;
       const baseRate = parseFloat(latestRate) || 0;
 
-      let finalRate = baseRate;
-
-      // Touch logic
-      if (touch && touch < 90) {
-        finalRate = (baseRate * touch) / 100;
-      }
+      // ✅ Always calculate: rate = baseRate * (touch / 100)
+      const finalRate = touch ? (baseRate * touch) / 100 : baseRate;
 
       updated.rate = finalRate ? finalRate.toFixed(2) : "";
 
@@ -122,7 +118,6 @@ export default function ThulabaramEstimate() {
 
     try {
       setLoading(true);
-
       const res = await createThulabaramEstimate(payload);
       toast.success("Added Successfully");
 
@@ -146,9 +141,7 @@ export default function ThulabaramEstimate() {
   return (
     <div className="min-h-screen bg-slate-50 flex justify-center p-6">
       <div className="w-full max-w-4xl">
-        <h1 className="text-2xl font-semibold mb-4">
-          Thulabaram Estimate
-        </h1>
+        <h1 className="text-2xl font-semibold mb-4">Thulabaram Estimate</h1>
 
         <form
           ref={formRef}
@@ -159,8 +152,20 @@ export default function ThulabaramEstimate() {
           className="bg-white p-6 rounded-xl shadow"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <TextInput label="Date" type="date" name="date" value={form.date} onChange={onChange} />
-            <TextInput label="Time" type="time" name="time" value={form.time} onChange={onChange} />
+            <TextInput
+              label="Date"
+              type="date"
+              name="date"
+              value={form.date}
+              onChange={onChange}
+            />
+            <TextInput
+              label="Time"
+              type="time"
+              name="time"
+              value={form.time}
+              onChange={onChange}
+            />
 
             <TextInput
               label="Weight (g)"
@@ -179,19 +184,35 @@ export default function ThulabaramEstimate() {
               name="touch"
               type="text"
               inputMode="decimal"
-              placeholder="Eg: 90 or 85.5"
+              placeholder="Eg: 99.9 or 85.5"
               value={form.touch}
               onKeyDown={allowOnlyDecimalNumbers}
               onChange={onChange}
               required
             />
 
-            <TextInput label="Rate (₹)" name="rate" placeholder="Auto from touch" value={form.rate} disabled />
-            <TextInput label="Amount (₹)" name="amount" placeholder="Auto calculated" value={form.amount} disabled />
+            <TextInput
+              label="Rate (₹)"
+              name="rate"
+              placeholder="Auto from touch"
+              value={form.rate}
+              disabled
+            />
+            <TextInput
+              label="Amount (₹)"
+              name="amount"
+              placeholder="Auto calculated"
+              value={form.amount}
+              disabled
+            />
           </div>
 
           <div className="flex justify-end mt-6">
-            <Button type="submit" disabled={loading} icon={<Printer className="w-4 h-4" />}>
+            <Button
+              type="submit"
+              disabled={loading}
+              icon={<Printer className="w-4 h-4" />}
+            >
               Add & Print
             </Button>
           </div>

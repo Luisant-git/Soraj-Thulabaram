@@ -57,7 +57,6 @@ export default function ThulabaramEstimate() {
     (async () => {
       try {
         setRateLoading(true);
-
         const rates = await getAllRates();
 
         if (!rates?.length) {
@@ -126,43 +125,12 @@ export default function ThulabaramEstimate() {
     });
   };
 
-  /* ========= PDF helpers ========= */
-  const fetchPdfBlob = async (id) => {
-    const url = `${import.meta.env.VITE_API_URL}/thulabaram-estimates/download-pdf/${id}`;
-    const resp = await fetch(url);
-
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => "");
-      throw new Error(`Unable to print (PDF ${resp.status}): ${text?.slice(0, 120) || resp.statusText}`);
-    }
-
-    const ct = resp.headers.get("content-type") || "";
-    if (!ct.includes("pdf")) {
-      const text = await resp.text().catch(() => "");
-      throw new Error(`Unable to print (Not PDF: ${ct}) ${text?.slice(0, 120)}`);
-    }
-
-    return resp.blob();
-  };
-
-  // ✅ Download + Print with NO preview / NO new tab
-  const downloadAndPrintPdfBlob = (blob, fileName) =>
+  /* ========= HTML Print (NO PDF, NO download, NO new tab) ========= */
+  const printHtmlReceipt = (id) =>
     new Promise((resolve, reject) => {
-      const objectUrl = URL.createObjectURL(blob);
+      // cache-bust so old look won't come
+      const url = `${import.meta.env.VITE_API_URL}/thulabaram-estimates/download/${id}?v=${Date.now()}`;
 
-      // 1) Download (silent)
-      try {
-        const a = document.createElement("a");
-        a.href = objectUrl;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      } catch (e) {
-        // download fail should not stop print; continue
-      }
-
-      // 2) Print via hidden iframe
       const iframe = document.createElement("iframe");
       iframe.style.position = "fixed";
       iframe.style.right = "0";
@@ -170,19 +138,18 @@ export default function ThulabaramEstimate() {
       iframe.style.width = "0";
       iframe.style.height = "0";
       iframe.style.border = "0";
-      iframe.src = objectUrl;
+      iframe.src = url;
 
       let done = false;
 
       const cleanup = () => {
-        try { URL.revokeObjectURL(objectUrl); } catch {}
+        window.removeEventListener("message", onMsg);
         try { iframe.remove(); } catch {}
       };
 
       const ok = () => {
         if (done) return;
         done = true;
-        window.removeEventListener("afterprint", onAfterPrintWindow);
         cleanup();
         resolve(true);
       };
@@ -190,37 +157,32 @@ export default function ThulabaramEstimate() {
       const fail = (err) => {
         if (done) return;
         done = true;
-        window.removeEventListener("afterprint", onAfterPrintWindow);
         cleanup();
         reject(err);
       };
 
-      // Some browsers fire afterprint on parent window
-      const onAfterPrintWindow = () => ok();
-      window.addEventListener("afterprint", onAfterPrintWindow);
+      const onMsg = (e) => {
+        // backend receipt page should post this after print dialog closes
+        if (e.data === "PRINT_DONE") ok();
+      };
+
+      window.addEventListener("message", onMsg);
 
       iframe.onload = () => {
         try {
-          const w = iframe.contentWindow;
-          if (!w) throw new Error("Print window not available");
-
-          // Some browsers fire afterprint on iframe window
-          w.onafterprint = () => ok();
-
-          w.focus();
-          w.print();
+          // backend page listens for this and runs window.print()
+          iframe.contentWindow?.postMessage("PRINT", "*");
         } catch (e) {
-          fail(e);
+          fail(new Error("Unable to trigger print"));
         }
       };
 
-      iframe.onerror = () => fail(new Error("Unable to load PDF for printing"));
+      iframe.onerror = () => fail(new Error("Unable to load receipt"));
 
       document.body.appendChild(iframe);
 
-      // If print dialog blocked/not opened, afterprint won't fire
       setTimeout(() => {
-        if (!done) fail(new Error("Unable to print (print dialog not opened)"));
+        if (!done) fail(new Error("Unable to print (timeout)"));
       }, 20000);
     });
 
@@ -251,16 +213,13 @@ export default function ThulabaramEstimate() {
       const newId = res?.id || res?.data?.id;
       if (!newId) throw new Error("Unable to print (ID not returned)");
 
-      // 2) Fetch PDF
-      const pdfBlob = await fetchPdfBlob(newId);
-
-      // 3) Download + Print (no preview)
-      await downloadAndPrintPdfBlob(pdfBlob, `thulabaram-${newId}.pdf`);
+      // 2) Print HTML receipt
+      await printHtmlReceipt(newId);
 
       toast.success("Printed successfully");
       setForm(defaultForm(latestRate));
     } catch (e) {
-      toast.error(e?.message || "Unable to print");
+      toast.error(String(e?.message || "Unable to print"));
     } finally {
       setLoading(false);
     }
@@ -322,7 +281,7 @@ export default function ThulabaramEstimate() {
               size="md"
               className="sm:w-auto"
             >
-              {loading ? "Printing..." : "Add & Print"}
+              {loading ? "Printing..." : "Print"}
             </Button>
           </div>
         </form>

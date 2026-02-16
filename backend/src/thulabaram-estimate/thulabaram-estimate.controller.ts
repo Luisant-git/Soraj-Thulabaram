@@ -28,135 +28,241 @@ export class ThulabaramEstimateController {
     return this.service.findAllInactive();
   }
   
-
-  @Get('download-pdf/:id')
-async downloadPdf(@Param('id') id: string, @Res() res: Response) {
-  const estimate = await this.service.findOne(Number(id));
-  if (!estimate) throw new NotFoundException('Estimate not found');
-
-  const weight = Number(estimate.weight ?? 0);
-  const touch = Number(estimate.touch ?? 0);
-  const amount = Number(estimate.amount ?? 0);
-  const rate = weight > 0 ? amount / weight : 0;
-
-  // --- Format like: 16/2/2026  12:00:37
-  const d = new Date();
-  const dateStr = `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
-  const timeStr =
-    `${String(d.getHours()).padStart(2, '0')}:` +
-    `${String(d.getMinutes()).padStart(2, '0')}:` +
-    `${String(d.getSeconds()).padStart(2, '0')}`;
-
-  const imagePath = join(process.cwd(), 'src', 'assets', 'LordshivaFam.jpg');
-  const hasLogo = fs.existsSync(imagePath);
-
-  // 3 inch width = 216pt
-  const W = 216;
-  const pad = 10;
-  const lineGap = 14;
-  const H = hasLogo ? 320 : 260;
-
-  // ✅ Use ONE label width for ALL rows (important for alignment)
-  const LABEL_W = 55;
-  const valueX = pad + LABEL_W;
-  const valueW = (W - pad) - valueX; // right edge = W - pad
-
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="thulabaram-${id}.pdf"`);
-  res.setHeader('Cache-Control', 'no-store');
-
-  const doc = new PDFDocument({
-    size: [W, H],
-    margins: { top: 0, bottom: 0, left: 0, right: 0 },
-  });
-
-  doc.pipe(res);
-
-  let y = 12;
-
-  if (hasLogo) {
-    const imgW = 42;
-    const x = (W - imgW) / 2;
-    doc.image(imagePath, x, y, { width: imgW });
-    y += 55;
-  }
-
-  doc.font('Courier-Bold').fontSize(12).text('VELAN THULABARAM', pad, y, {
-    width: W - pad * 2,
-    align: 'center',
-  });
-  y += 20;
-
-  const hr = () => {
-    doc
-      .moveTo(pad, y)
-      .lineTo(W - pad, y)
-      .dash(2, { space: 2 })
-      .stroke()
-      .undash();
-    y += 10;
-  };
-
-  // ✅ normal rows (label left, value right) — consistent columns
-  const row = (label: string, value: string, bold = false) => {
-    doc.font(bold ? 'Courier-Bold' : 'Courier').fontSize(10);
-
-    doc.text(label, pad, y, { width: LABEL_W, align: 'left', lineBreak: false });
-    doc.text(value, valueX, y, { width: valueW, align: 'right', lineBreak: false });
-
-    y += lineGap;
-  };
-
-  // ✅ DATE row: date left + time right WITHOUT overlap
-  const rowDateTime = (label: string, dateValue: string, timeValue: string) => {
-    doc.font('Courier').fontSize(10);
-
-    // label
-    doc.text(label, pad, y, { width: LABEL_W, align: 'left', lineBreak: false });
-
-    // compute exact X for time at right edge
-    const gap = 6; // space between date and time
-    const timeTextW = doc.widthOfString(timeValue);
-    const timeXExact = valueX + valueW - timeTextW; // right aligned exact
-
-    // date can occupy only until (timeXExact - gap)
-    const maxDateW = Math.max(0, (timeXExact - gap) - valueX);
-
-    // draw date (left)
-    doc.text(dateValue, valueX, y, {
-      width: maxDateW,
-      align: 'left',
-      lineBreak: false,
-      ellipsis: true,
-    });
-
-    // draw time (right) last
-    doc.text(timeValue, timeXExact, y, { lineBreak: false });
-
-    y += lineGap;
-  };
-
-  // ---- content
-  hr();
-  rowDateTime('DATE:', dateStr, timeStr);  // ✅ your required format
-  hr();
-
-  row('WEIGHT', weight.toFixed(3));
-  row('TOUCH', touch.toFixed(2));
-  row('RATE', rate.toFixed(2));
-  row('AMOUNT', amount.toFixed(2), true);
-
-  hr();
-
-  doc.font('Courier-Bold').fontSize(10).text('THANK YOU, VISIT AGAIN!', pad, y + 8, {
-    width: W - pad * 2,
-    align: 'center',
-  });
-
-  doc.end();
-}
+  @Get('download/:id')
+  async download(@Param('id') id: string, @Res() res: Response) {
+    const estimate = await this.service.findOne(Number(id));
+    if (!estimate) throw new NotFoundException('Estimate not found');
   
+    // ===== image -> base64 =====
+    const imagePath = join(process.cwd(), 'src', 'assets', 'LordshivaFam.jpg');
+    let imageBase64 = '';
+    let imageMime = 'image/jpeg';
+  
+    if (fs.existsSync(imagePath)) {
+      const ext = imagePath.split('.').pop()?.toLowerCase();
+      imageMime = ext === 'png' ? 'image/png' : 'image/jpeg';
+      imageBase64 = fs.readFileSync(imagePath).toString('base64');
+    }
+  
+    // ===== date/time =====
+    const now = new Date();
+  
+    const dateIso = (estimate as any)?.date; // "YYYY-MM-DD"
+    const timeStrRaw = (estimate as any)?.time; // "HH:MM" or "HH:MM:SS"
+  
+    const dateStr = (() => {
+      if (typeof dateIso === 'string' && dateIso.includes('-')) {
+        const [Y, M, D] = dateIso.split('-').map((x) => parseInt(x, 10));
+        if (Y && M && D) return `${D}/${M}/${Y}`;
+      }
+      return `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
+    })();
+  
+    // ===== 12 Hour Time Format =====
+    const timeStr = (() => {
+      let hours: number;
+      let minutes: number;
+      let seconds: number;
+  
+      if (typeof timeStrRaw === 'string' && timeStrRaw.length >= 5) {
+        const parts = timeStrRaw.split(':').map(Number);
+        hours = parts[0];
+        minutes = parts[1];
+        seconds = parts[2] ?? 0;
+      } else {
+        hours = now.getHours();
+        minutes = now.getMinutes();
+        seconds = now.getSeconds();
+      }
+  
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+  
+      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')} ${ampm}`;
+    })();
+  
+    // ===== values =====
+    const weight = Number(estimate.weight ?? 0);
+    const touch = Number(estimate.touch ?? 0);
+    const amount = Number(estimate.amount ?? 0);
+    const rate = weight > 0 ? amount / weight : 0;
+  
+    // ===== HTML =====
+    const html = `<!doctype html>
+    <html>
+    <head>
+    <meta charset="utf-8" />
+    <title>Receipt</title>
+    
+    <style>
+    @media print {
+      @page { size: 76.2mm auto; margin: 0; }
+    }
+    
+    html, body{
+      width: 76.2mm;
+      margin:0;
+      padding:0;
+      font-family: monospace;
+      font-size: 12px;
+      line-height: 1.4;
+      color:#000;
+      background:#fff;
+    }
+    
+    .receipt{
+  width: 76.2mm;
+  margin:0;
+  padding-top: 3mm;
+  padding-bottom: 3mm;
+  padding-left: 5mm;   /* LEFT PADDING FOR ALL */
+  padding-right: 0;
+  box-sizing: border-box;
+}
+
+    
+    /* Logo centered */
+    .logo{
+      display:block;
+      margin: 2mm auto;
+      width: 24mm;
+      height:auto;
+    }
+    
+    /* Title centered */
+    .title{
+      text-align:center;
+      font-weight:700;
+      font-size:15px;
+      margin: 2mm 0 3mm 0;
+      width:100%;
+    }
+    
+    /* Divider */
+    .hr{
+      border-top: 1px dashed #000;
+      margin: 4px 0;
+    }
+    
+    .row{
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.label{
+  flex: 0 0 28mm;   /* Fixed label width */
+}
+
+.value{
+  flex: 1;
+  text-align: right;
+}
+
+
+    
+    .date-row .value{
+  text-align: left;
+}
+
+
+
+    .dtvalue .d{
+      text-align:left;
+    }
+    
+    .dtvalue .t{
+      text-align:right;
+    }
+    
+    .bold{
+      font-weight:700;
+      font-size:14px;
+    }
+    
+    .footer{
+      text-align:center;
+      font-weight:700;
+      font-size:12px;
+      margin-top: 6mm;
+    }
       
+
+    </style>
+    </head>
+    
+    <body>
+    <div class="receipt">
+    
+      ${imageBase64 ? `<img class="logo" src="data:${imageMime};base64,${imageBase64}" />` : ``}
+    
+      <div class="title">VELAN THULABARAM</div>
+    
+      <div class="hr"></div>
+    
+      <div class="body-section">
+    
+       <div class="row date-row">
+  <div class="label">DATE</div>
+  <div class="value">${dateStr} ${timeStr}</div>
+</div>
+
+    
+        <div class="hr"></div>
+    
+        <div class="row">
+          <div class="label">WEIGHT</div>
+          <div class="value">${weight.toFixed(3)}</div>
+        </div>
+    
+        <div class="row">
+          <div class="label">TOUCH</div>
+          <div class="value">${touch.toFixed(2)}</div>
+        </div>
+    
+        <div class="row">
+          <div class="label">RATE</div>
+          <div class="value">${rate.toFixed(2)}</div>
+        </div>
+    
+        <div class="row bold">
+          <div class="label">AMOUNT</div>
+          <div class="value">${amount.toFixed(2)}</div>
+        </div>
+    
+      </div>
+    
+      <div class="hr"></div>
+    
+      <div class="footer">
+        THANK YOU, VISIT AGAIN!
+      </div>
+    
+    </div>
+    
+    <script>
+    window.addEventListener('message', function(e){
+      if (e.data === 'PRINT') {
+        setTimeout(function(){ window.print(); }, 200);
+      }
+    });
+    
+    window.onafterprint = function(){
+      try { parent.postMessage('PRINT_DONE', '*'); } catch(e) {}
+    };
+    </script>
+    
+    </body>
+    </html>`;
+    
+  
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('Cache-Control', 'no-store');
+  
+    return res.send(html);
+  }
+     
 
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number) {

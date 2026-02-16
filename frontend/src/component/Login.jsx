@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { User, Lock, Eye, EyeOff } from "lucide-react";
 
-import Button from "./Button";
+
 import { loginAdmin } from "../api/Login";
 import TextInput from "./Input";
+import { Button } from "./FormFiled";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -30,7 +31,6 @@ export default function LoginPage() {
 
     try {
       setLoading(true);
-
       const data = await loginAdmin(email, password);
 
       localStorage.setItem("admin", JSON.stringify(data.admin));
@@ -46,8 +46,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex justify-center overflow-y-auto">
-      <div className="w-full max-w-md flex items-center justify-center px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-sm sm:max-w-md">
         <div className="w-full bg-white rounded-xl sm:rounded-2xl shadow-md sm:shadow-xl p-5 sm:p-8">
           <h2 className="text-center text-lg sm:text-2xl font-bold text-gray-800">
             Admin Login
@@ -79,9 +79,9 @@ export default function LoginPage() {
             />
 
             <div className="pt-1">
-              <Button type="submit" full disabled={loading}>
-                {loading ? "Signing in..." : "Sign In"}
-              </Button>
+            <Button type="submit" full size="sm" disabled={loading}>
+  {loading ? "Signing in..." : "Sign In"}
+</Button>
             </div>
           </form>
         </div>

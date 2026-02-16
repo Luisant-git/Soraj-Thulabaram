@@ -59,19 +59,25 @@ export function TextInput({
 
 // ------------------ Reusable Button ------------------
 export function Button({
-  children,      // Button text
-  onClick,       // onClick handler
-  type = "button", 
-  icon,          // Optional icon
+  children,
+  onClick,
+  type = "button",
+  icon,
   disabled = false,
-  className = "",// Extra CSS classes
+  className = "",
+  full = false,          // ✅ add this
 }) {
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm text-white bg-blue-600 hover:brightness-95 disabled:opacity-60 transition ${className}`}
+      className={[
+        "flex items-center gap-2 px-4 py-2 rounded-lg text-sm text-white",
+        "bg-blue-600 hover:brightness-95 disabled:opacity-60 transition",
+        full ? "w-full justify-center" : "inline-flex", // ✅ full width like input
+        className,
+      ].join(" ")}
     >
       {icon && icon} {children}
     </button>

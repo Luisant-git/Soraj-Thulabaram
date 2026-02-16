@@ -26,9 +26,12 @@
     "@nestjs/platform-express": "^10.0.0",
     "@prisma/client": "^4.16.2",
     "bcryptjs": "^3.0.3",
+    "canvas": "^3.2.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
     "dotenv": "^17.2.3",
+    "escpos": "^3.0.0-alpha.6",
+    "escpos-usb": "^3.0.0-alpha.4",
     "pdfkit": "^0.17.2",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.1"

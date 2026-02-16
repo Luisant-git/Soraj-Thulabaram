@@ -211,10 +211,12 @@ export default function ThulabaramEstimate() {
       // 1) Save
       const res = await createThulabaramEstimate(payload);
       const newId = res?.id || res?.data?.id;
-      if (!newId) throw new Error("Unable to print (ID not returned)");
+      if (!newId) throw new Error("Unable to save");
 
-      // 2) Print HTML receipt
-      await printHtmlReceipt(newId);
+      // 2) Direct print to thermal printer
+      await fetch(`${import.meta.env.VITE_API_URL}/thulabaram-estimates/print/${newId}`, {
+        method: 'POST'
+      });
 
       toast.success("Printed successfully");
       setForm(defaultForm(latestRate));

@@ -11,38 +11,14 @@ import PDFDocument = require('pdfkit');
 import { UpdateThulabaramEstimateDto } from './dto/update-thulabaram-estimate.dto';
 import { ThulabaramEstimateService } from './thulabaram-estimate.service';
 import { CreateThulabaramEstimateDto } from './dto/create-thulabaram-estimate.dto';
-import { PrintService } from './print.service';
 
 @Controller('thulabaram-estimates')
 export class ThulabaramEstimateController {
-  constructor(
-    private readonly service: ThulabaramEstimateService,
-    private readonly printService: PrintService
-  ) { }
+  constructor(private readonly service: ThulabaramEstimateService) { }
 
   @Post()
   async create(@Body() dto: CreateThulabaramEstimateDto) {
     return this.service.create(dto);
-  }
-
-  @Post('print/:id')
-  async print(@Param('id', ParseIntPipe) id: number) {
-    const estimate = await this.service.findOne(id);
-    if (!estimate) throw new NotFoundException('Estimate not found');
-
-    const weight = Number(estimate.weight ?? 0);
-    const touch = Number(estimate.touch ?? 0);
-    const amount = Number(estimate.amount ?? 0);
-    const rate = weight > 0 ? amount / weight : 0;
-
-    return this.printService.printReceipt({
-      date: estimate.date,
-      time: estimate.time,
-      weight: weight.toFixed(3),
-      touch: touch.toFixed(2),
-      rate: rate.toFixed(2),
-      amount: amount.toFixed(2)
-    });
   }
 
 
@@ -121,8 +97,6 @@ export class ThulabaramEstimateController {
     <style>
     @media print {
       @page { size: 76.2mm auto; margin: 0; }
-      body { visibility: hidden; }
-      .receipt { visibility: visible; position: absolute; left: 0; top: 0; }
     }
     
     html, body{
@@ -269,7 +243,7 @@ export class ThulabaramEstimateController {
     <script>
     window.addEventListener('message', function(e){
       if (e.data === 'PRINT') {
-        window.print();
+        setTimeout(function(){ window.print(); }, 200);
       }
     });
     

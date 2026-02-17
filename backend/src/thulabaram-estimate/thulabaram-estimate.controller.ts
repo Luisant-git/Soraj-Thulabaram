@@ -243,13 +243,15 @@ export class ThulabaramEstimateController {
     <script>
     window.addEventListener('message', function(e){
       if (e.data === 'PRINT') {
+        window.onafterprint = function() {
+          try {
+            parent.postMessage('PRINT_DONE', '*');
+          } catch(e) {}
+        };
+        
         setTimeout(function(){ window.print(); }, 200);
       }
     });
-    
-    window.onafterprint = function(){
-      try { parent.postMessage('PRINT_DONE', '*'); } catch(e) {}
-    };
     </script>
     
     </body>

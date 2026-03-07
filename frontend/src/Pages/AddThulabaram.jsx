@@ -128,7 +128,6 @@ export default function ThulabaramEstimate() {
   /* ========= HTML Print (NO PDF, NO download, NO new tab) ========= */
   const printHtmlReceipt = (id) =>
     new Promise((resolve, reject) => {
-      // cache-bust so old look won't come
       const url = `${import.meta.env.VITE_API_URL}/thulabaram-estimates/download/${id}?v=${Date.now()}`;
 
       const iframe = document.createElement("iframe");
@@ -151,7 +150,7 @@ export default function ThulabaramEstimate() {
         if (done) return;
         done = true;
         cleanup();
-        resolve(true);
+        resolve();
       };
 
       const fail = (err) => {
@@ -162,7 +161,6 @@ export default function ThulabaramEstimate() {
       };
 
       const onMsg = (e) => {
-        // backend receipt page should post this after print dialog closes
         if (e.data === "PRINT_DONE") ok();
       };
 
@@ -170,7 +168,6 @@ export default function ThulabaramEstimate() {
 
       iframe.onload = () => {
         try {
-          // backend page listens for this and runs window.print()
           iframe.contentWindow?.postMessage("PRINT", "*");
         } catch (e) {
           fail(new Error("Unable to trigger print"));
@@ -216,7 +213,6 @@ export default function ThulabaramEstimate() {
       // 2) Print HTML receipt
       await printHtmlReceipt(newId);
 
-      toast.success("Printed successfully");
       setForm(defaultForm(latestRate));
     } catch (e) {
       toast.error(String(e?.message || "Unable to print"));

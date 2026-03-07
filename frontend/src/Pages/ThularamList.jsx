@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Search, X } from "lucide-react";
+import { Eye, Search, X } from "lucide-react";
 import { getPaginatedData } from "../api/Pagination";
 
 import { Button } from "../component/FormFiled";
@@ -42,6 +42,19 @@ export default function ThulabaramList() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const [openView, setOpenView] = useState(false);
+const [selected, setSelected] = useState(null);
+
+const openModal = (row) => {
+  setSelected(row);
+  setOpenView(true);
+};
+
+const closeModal = () => {
+  setOpenView(false);
+  setSelected(null);
+};
 
   const fetchData = async (pageNo = 1, q = search, limit = meta.limit) => {
     try {
@@ -89,6 +102,23 @@ export default function ThulabaramList() {
   
     fetchData(1, search, value);
   };
+
+  function DetailRow({ label, value, mono, strong }) {
+    return (
+      <div className="flex items-center justify-between gap-6 py-3">
+        <div className="text-sm text-slate-600">{label}</div>
+        <div
+          className={[
+            "text-sm text-slate-900 text-right",
+            strong ? "font-semibold" : "font-medium",
+            mono ? "font-mono" : "",
+          ].join(" ")}
+        >
+          {value ?? "-"}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="max-w-6xl mx-auto p-4 space-y-4">
       {/* Header */}
@@ -161,42 +191,50 @@ export default function ThulabaramList() {
                 <th className="px-6 py-4 text-right">Touch (%)</th>
                 <th className="px-6 py-4 text-right">Rate</th>
                 <th className="px-6 py-4 text-right">Amount</th>
+                <th className="px-6 py-4 text-right">Action</th>
               </tr>
             </thead>
-
             <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                <tr>
-                  <td colSpan="6" className="py-8 text-center text-slate-400">
-                    Loading...
-                  </td>
-                </tr>
-              ) : rows.length === 0 ? (
-                <tr>
-                  <td colSpan="6" className="py-8 text-center text-slate-400">
-                    No records found
-                  </td>
-                </tr>
-              ) : (
-                rows.map((r, i) => (
-                  <tr key={r.id || i} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 text-slate-500">
-                      {(page - 1) * meta.limit + i + 1}
-                    </td>
-                    <td className="px-6 py-4 font-medium">{formatDate(r.date)}</td>
-                    <td className="px-6 py-4 font-mono text-slate-600">{formatTime(r.time)}</td>
-                    <td className="px-6 py-4 text-right font-mono">{r.weight || 0}</td>
-                    <td className="px-6 py-4 text-right font-mono">
-                      {r.touch || 0}
-                    </td>
-                    <td className="px-6 py-4 text-right font-mono">
-                      {inr(((r.rate?.rate || 0) * (r.touch || 0)) / 100)}
-                    </td>
-                    <td className="px-6 py-4 text-right font-mono font-semibold">{inr(r.amount)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
+  {loading ? (
+    <tr>
+      {/* you have 8 columns now */}
+      <td colSpan="8" className="py-8 text-center text-slate-400">Loading...</td>
+    </tr>
+  ) : rows.length === 0 ? (
+    <tr>
+      <td colSpan="8" className="py-8 text-center text-slate-400">No records found</td>
+    </tr>
+  ) : (
+    rows.map((r, i) => (
+      <tr key={r.id || i} className="hover:bg-slate-50 transition-colors">
+        <td className="px-6 py-4 text-slate-500">
+          {(page - 1) * meta.limit + i + 1}
+        </td>
+        <td className="px-6 py-4 font-medium">{formatDate(r.date)}</td>
+        <td className="px-6 py-4 font-mono text-slate-600">{formatTime(r.time)}</td>
+        <td className="px-6 py-4 text-right font-mono">{r.weight || 0}</td>
+        <td className="px-6 py-4 text-right font-mono">{r.touch || 0}</td>
+        <td className="px-6 py-4 text-right font-mono">
+          {inr(((r.rate?.rate || 0) * (r.touch || 0)) / 100)}
+        </td>
+        <td className="px-6 py-4 text-right font-mono font-semibold">{inr(r.amount)}</td>
+
+        <td className="px-6 py-4 text-right">
+  <button
+    type="button"
+    onClick={() => openModal(r)}
+    title="View"
+    className="inline-flex h-9 w-9 items-center justify-center 
+              text-blue-600
+               focus:outline-none "
+  >
+    <Eye size={18} />
+  </button>
+</td>
+      </tr>
+    ))
+  )}
+</tbody>
           </table>
         </div>
 
@@ -229,6 +267,75 @@ export default function ThulabaramList() {
           </div>
         )}
       </div>
+      {openView && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+    {/* Backdrop (click to close) */}
+    <button
+      type="button"
+      onClick={closeModal}
+      className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+      aria-label="Close modal backdrop"
+    />
+
+    {/* Dialog */}
+    <div
+      className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-2xl"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between border-b bg-white px-6 py-4">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">
+            Thulabaram Details
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            View calculation summary
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={closeModal}
+          className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          aria-label="Close"
+        >
+          <X size={18} />
+        </button>
+      </div>
+
+      {/* Body (form-like) */}
+      {/* Body (view look) */}
+<div className="bg-white px-6 py-5">
+  <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+    <div className="px-5 divide-y divide-slate-100">
+      <DetailRow label="Date" value={formatDate(selected?.date)} />
+      <DetailRow label="Time" value={formatTime(selected?.time)} mono />
+      <DetailRow label="Weight (g)" value={selected?.weight ?? 0} mono />
+      <DetailRow label="Touch (%)" value={selected?.touch ?? 0} mono />
+      <DetailRow label="Base Rate" value={inr(selected?.rate?.rate ?? 0)} mono />
+      <DetailRow
+        label="Calculated Rate"
+        value={inr(((selected?.rate?.rate || 0) * (selected?.touch || 0)) / 100)}
+        mono
+      />
+    </div>
+
+    <div className="border-t border-slate-200 bg-slate-50 px-5 py-4">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-slate-700">Total Amount</span>
+        <span className="text-base font-semibold text-slate-900 font-mono">
+          {inr(selected?.amount ?? 0)}
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+    </div>
+  </div>
+)}
     </div>
   );
 }

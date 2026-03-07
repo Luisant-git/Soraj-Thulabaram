@@ -2,6 +2,8 @@ import React, { useEffect, useState, useMemo } from "react";
 import { PlusCircle, Pencil, Trash2, X, ChevronLeft, ChevronRight, RefreshCcw } from "lucide-react";
 import { toast } from "react-toastify";
 import { createRate, deleteRate, getAllRates, updateRate } from "../api/Rate";
+import { Button } from "../component/FormFiled";
+
 
 
 
@@ -66,7 +68,7 @@ const RateModal = ({ isOpen, onClose, onSubmit, initialData, loading }) => {
             <X size={20} />
           </button>
         </div>
-        
+
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Date</label>
@@ -109,15 +111,20 @@ const RateModal = ({ isOpen, onClose, onSubmit, initialData, loading }) => {
 
 // --- Main List Component ---
 export default function ThulabaramRateList() {
-  const [allRecords, setAllRecords] = useState([]); 
+  const [allRecords, setAllRecords] = useState([]);
   const [loading, setLoading] = useState(false);
-  
+
   const [page, setPage] = useState(1);
-  const itemsPerPage = 10; 
+
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [searchDate, setSearchDate] = useState("");
+
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+
 
   const fetchRates = async () => {
     try {
@@ -138,12 +145,22 @@ export default function ThulabaramRateList() {
     fetchRates();
   }, []);
 
+  const filteredRecords = useMemo(() => {
+    if (!searchDate) return allRecords;
+
+    return allRecords.filter((r) => {
+      const d = fmtDateForInput(r.date);
+      return d === searchDate;
+    });
+  }, [allRecords, searchDate]);
+
   const paginatedRows = useMemo(() => {
     const start = (page - 1) * itemsPerPage;
-    return allRecords.slice(start, start + itemsPerPage);
-  }, [allRecords, page]);
+    return filteredRecords.slice(start, start + itemsPerPage);
+  }, [filteredRecords, page, itemsPerPage]);
 
-  const totalPages = Math.ceil(allRecords.length / itemsPerPage) || 1;
+  const totalPages = Math.ceil(filteredRecords.length / itemsPerPage) || 1;
+
 
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= totalPages) setPage(newPage);
@@ -174,7 +191,7 @@ export default function ThulabaramRateList() {
         toast.success("Rate added successfully");
       }
       setIsModalOpen(false);
-      fetchRates(); 
+      fetchRates();
     } catch (e) {
       console.error(e);
       toast.error(e.message || "Operation failed.");
@@ -208,7 +225,7 @@ export default function ThulabaramRateList() {
         </div>
 
         <div className="flex gap-2">
-           
+
           <button
             onClick={handleAddClick}
             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition shadow-sm"
@@ -217,6 +234,57 @@ export default function ThulabaramRateList() {
             <span>Add Rate</span>
           </button>
         </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+
+        {/* Entries Dropdown */}
+        <div className="flex items-center gap-2 text-sm">
+          <span>Show</span>
+
+          <select
+            value={itemsPerPage}
+            onChange={(e) => {
+              setItemsPerPage(Number(e.target.value));
+              setPage(1);
+            }}
+            className="border rounded-md px-2 py-1"
+          >
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+            <option value={150}>150</option>
+            <option value={200}>200</option>
+          </select>
+
+          <span>entries</span>
+        </div>
+
+        {/* Date Search */}
+        <div className="flex items-center gap-2 text-sm">
+          <span>Search Date</span>
+
+          <input
+            type="date"
+            value={searchDate}
+            onChange={(e) => {
+              setSearchDate(e.target.value);
+              setPage(1);
+            }}
+            className="border rounded-md px-2 py-1"
+          />
+
+          {searchDate && (
+            <button
+              onClick={() => setSearchDate("")}
+              className="text-red-500 text-xs"
+            >
+              X
+            </button>
+          )}
+        </div>
+
       </div>
 
       <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
@@ -232,10 +300,18 @@ export default function ThulabaramRateList() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading && allRecords.length === 0 ? (
-                 <tr><td colSpan="4" className="p-8 text-center text-slate-400">Loading...</td></tr>
-              ) : allRecords.length === 0 ? (
-                <tr><td colSpan="4" className="p-8 text-center text-slate-400">No rates found</td></tr>
+              {loading ? (
+                <tr>
+                  <td colSpan="4" className="p-8 text-center text-slate-400">
+                    Loading...
+                  </td>
+                </tr>
+              ) : filteredRecords.length === 0 ? (
+                <tr>
+                  <td colSpan="4" className="p-8 text-center text-slate-400">
+                    No rate list found
+                  </td>
+                </tr>
               ) : (
                 paginatedRows.map((row, index) => (
                   <tr key={row.id || row._id || index} className="hover:bg-slate-50 transition-colors">
@@ -275,33 +351,38 @@ export default function ThulabaramRateList() {
         </div>
 
         {allRecords.length > 0 && (
-          <div className="flex items-center justify-between px-6 py-4 border-t bg-slate-50">
-            <div className="text-xs text-slate-500">
-              Page <strong>{page}</strong> of <strong>{totalPages}</strong>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handlePageChange(page - 1)}
-                disabled={page <= 1}
-                className="p-1.5 border rounded-md hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <button
-                onClick={() => handlePageChange(page + 1)}
-                disabled={page >= totalPages}
-                className="p-1.5 border rounded-md hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
+          <div className="flex items-center justify-center gap-4 px-6 py-4 border-t bg-slate-50">
+
+            {/* Previous */}
+            <Button
+              onClick={() => handlePageChange(page - 1)}
+              disabled={page === 1}
+              className="px-3 py-1.5 border rounded-md text-sm bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </Button>
+
+            {/* Page Info */}
+            <span className="text-sm font-medium text-slate-700">
+              Page {page} of {totalPages}
+            </span>
+
+            {/* Next */}
+            <Button
+              onClick={() => handlePageChange(page + 1)}
+              disabled={page === totalPages}
+              className="px-3 py-1.5 border rounded-md text-sm bg-white  disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </Button>
+
           </div>
         )}
       </div>
 
-      <RateModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
+      <RateModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
         onSubmit={handleModalSubmit}
         initialData={editingItem}
         loading={submitting}

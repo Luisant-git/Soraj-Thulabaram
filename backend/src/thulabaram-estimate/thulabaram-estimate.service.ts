@@ -54,38 +54,61 @@ export class ThulabaramEstimateService {
   
   
 
-  
   async findAllPaginated(
     page: number = 1,
     limit: number = 10,
     search?: string,
   ) {
-    // Validate numbers
     page = Math.max(1, Number(page));
     limit = Math.max(1, Number(limit));
   
     const skip = (page - 1) * limit;
   
-    // Build search condition
     const where: any = { isActive: true };
+  
     if (search) {
       const searchNumber = Number(search);
-      where.OR = [
-        { weight: searchNumber || undefined },
-        { rate: { rate: searchNumber || undefined } },
-      ];
+      const searchDate = new Date(search);
+  
+      const conditions: any[] = [];
+  
+      // Number search
+      if (!isNaN(searchNumber)) {
+        conditions.push(
+          { weight: searchNumber },
+          { rate: { rate: searchNumber } }
+        );
+      }
+  
+      // Date search
+      if (!isNaN(searchDate.getTime())) {
+        const startOfDay = new Date(searchDate);
+        startOfDay.setHours(0, 0, 0, 0);
+  
+        const endOfDay = new Date(searchDate);
+        endOfDay.setHours(23, 59, 59, 999);
+  
+        conditions.push({
+          date: {
+            gte: startOfDay,
+            lte: endOfDay,
+          },
+        });
+      }
+  
+      if (conditions.length > 0) {
+        where.OR = conditions;
+      }
     }
   
-    // Total count
     const total = await this.prisma.thulabaramEstimate.count({ where });
   
-    // Fetch paginated data
     const data = await this.prisma.thulabaramEstimate.findMany({
       where,
       include: { rate: true },
       orderBy: { createdAt: 'desc' },
-      skip,   // OFFSET
-      take: limit, // LIMIT
+      skip,
+      take: limit,
     });
   
     return {
@@ -96,7 +119,6 @@ export class ThulabaramEstimateService {
       data,
     };
   }
-  
 
  
   async findAllInactive() {

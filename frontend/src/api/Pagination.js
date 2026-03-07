@@ -1,20 +1,12 @@
 const BASE_URL = import.meta.env.VITE_API_URL;
 
 /**
- * Generic pagination API helper using fetch
- * Always returns { data, meta: { page, limit, total, totalPages } }
- *
- * @param {string} endpoint - API endpoint, e.g., "/thulabaram-estimates"
- * @param {object} options - { page, limit, search }
- * @returns {Promise<{data: Array, meta: {page, limit, total, totalPages}}>}
+ * Generic pagination API helper
+ * Works with NestJS pagination response
  */
 export const getPaginatedData = async (
   endpoint,
-  {
-    page = 1,
-    limit = 10,
-    search = "",
-  } = {}
+  { page = 1, limit = 10, search = "" } = {}
 ) => {
   const params = new URLSearchParams({
     page,
@@ -36,14 +28,13 @@ export const getPaginatedData = async (
 
   const result = await response.json();
 
-  // Standardize output to always include data & meta
-  const data = result.thulabaramEstimate || result.data || (Array.isArray(result) ? result : []);
-  const meta = result.meta || {
-    page,
-    limit,
-    total: Array.isArray(result) ? result.length : data.length,
-    totalPages: 1,
+  return {
+    data: result.data || [],
+    meta: {
+      page: result.page || 1,
+      limit: result.limit || limit,
+      total: result.total || 0,
+      totalPages: result.totalPages || 1,
+    },
   };
-
-  return { data, meta };
 };

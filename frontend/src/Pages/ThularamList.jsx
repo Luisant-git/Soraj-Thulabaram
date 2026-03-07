@@ -43,39 +43,39 @@ export default function ThulabaramList() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const fetchData = async (pageNo = 1, q = search) => {
+  const fetchData = async (pageNo = 1, q = search, limit = meta.limit) => {
     try {
       setLoading(true);
+  
       const res = await getPaginatedData("/thulabaram-estimates", {
         page: pageNo,
-        limit: meta.limit,
+        limit: limit,
         search: q,
       });
-
-      // Only set rows from paginated data
+  
       const data = res?.data || [];
+  
       const metaData = res?.meta || {
         page: 1,
-        limit: meta.limit,
+        limit: limit,
         total: data.length,
         totalPages: 1,
       };
-
+  
       setRows(data);
       setMeta(metaData);
     } catch (err) {
       console.error("Failed to fetch data:", err);
       setRows([]);
-      setMeta({ page: 1, limit: 5, total: 0, totalPages: 1 });
+      setMeta({ page: 1, limit: limit, total: 0, totalPages: 1 });
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData(page, search);
+    fetchData(page, search, meta.limit);
   }, [page]);
-  
   const onSearchChange = (value) => {
     setSearch(value);
     setPage(1);
@@ -84,14 +84,10 @@ export default function ThulabaramList() {
 
   const handleLimitChange = (e) => {
     const value = Number(e.target.value);
-
-    setMeta((prev) => ({
-      ...prev,
-      limit: value,
-    }));
-
+  
     setPage(1);
-    fetchData(1, search);
+  
+    fetchData(1, search, value);
   };
   return (
     <div className="max-w-6xl mx-auto p-4 space-y-4">
@@ -209,6 +205,8 @@ export default function ThulabaramList() {
           <div className="flex items-center justify-center gap-4 px-6 py-4 border-t bg-slate-50">
 
             <Button
+             className="px-3 py-1.5 border rounded-md text-sm bg-white  disabled:opacity-50 disabled:cursor-not-allowed"
+             
               disabled={page === 1}
               onClick={() => setPage((p) => p - 1)}
             >
@@ -220,6 +218,8 @@ export default function ThulabaramList() {
             </span>
 
             <Button
+             className="px-3 py-1.5 border rounded-md text-sm bg-white  disabled:opacity-50 disabled:cursor-not-allowed"
+             
               disabled={page === meta.totalPages}
               onClick={() => setPage((p) => p + 1)}
             >
